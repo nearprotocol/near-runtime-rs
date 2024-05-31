@@ -1,5 +1,6 @@
 ---
 source: near-sdk-macros/src/core_impl/code_generator/item_impl_info.rs
+assertion_line: 378
 expression: pretty_print_syn_str(&actual).unwrap()
 ---
 #[cfg(target_arch = "wasm32")]
@@ -7,17 +8,24 @@ expression: pretty_print_syn_str(&actual).unwrap()
 pub extern "C" fn new() {
     ::near_sdk::env::setup_panic_hook();
     if ::near_sdk::env::attached_deposit().as_yoctonear() != 0 {
-        ::near_sdk::env::panic_str("Method new doesn't accept deposit");
+        ::near_sdk::env::panic_err(
+            ::near_sdk::errors::DepositNotAccepted::new("new").into(),
+        );
     }
     if ::near_sdk::env::state_exists() {
-        ::near_sdk::env::panic_str("The contract has already been initialized");
+        ::near_sdk::env::panic_err(
+            ::near_sdk::errors::ContractAlreadyInitialized {
+            }
+                .into(),
+        );
     }
     let contract = Hello::new();
     match contract {
         ::std::result::Result::Ok(contract) => {
             ::near_sdk::env::state_write(&contract);
         }
-        ::std::result::Result::Err(err) => ::near_sdk::FunctionError::panic(&err),
+        ::std::result::Result::Err(err) => {
+            ::near_sdk::FunctionError::panic(&err);
+        }
     }
 }
-

@@ -1,8 +1,9 @@
 use super::NonFungibleTokenEnumeration;
 use crate::non_fungible_token::token::Token;
 use crate::non_fungible_token::NonFungibleToken;
+use near_sdk::errors::{IndexOutOfBounds, InvalidArgument};
 use near_sdk::json_types::U128;
-use near_sdk::{env, require, AccountId};
+use near_sdk::{contract_error, require_or_err, unwrap_or_err, AccountId, BaseError};
 
 type TokenId = String;
 
@@ -26,36 +27,34 @@ impl NonFungibleTokenEnumeration for NonFungibleToken {
         (self.owner_by_id.len() as u128).into()
     }
 
-    fn nft_tokens(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
+    fn nft_tokens(
+        &self,
+        from_index: Option<U128>,
+        limit: Option<u64>,
+    ) -> Result<Vec<Token>, BaseError> {
         // Get starting index, whether or not it was explicitly given.
         // Defaults to 0 based on the spec:
         // https://nomicon.io/Standards/NonFungibleToken/Enumeration.html#interface
         let start_index: u128 = from_index.map(From::from).unwrap_or_default();
-        require!(
-            (self.owner_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
+        require_or_err!((self.owner_by_id.len() as u128) >= start_index, IndexOutOfBounds {});
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
-        require!(limit != 0, "Cannot provide limit of 0.");
-        self.owner_by_id
+        require_or_err!(limit != 0, InvalidArgument::new("Cannot provide limit of 0."));
+        Ok(self
+            .owner_by_id
             .iter()
             .skip(start_index as usize)
             .take(limit)
             .map(|(token_id, owner_id)| self.enum_get_token(owner_id, token_id))
-            .collect()
+            .collect())
     }
 
-    fn nft_supply_for_owner(&self, account_id: AccountId) -> U128 {
-        let tokens_per_owner = self.tokens_per_owner.as_ref().unwrap_or_else(|| {
-            env::panic_str(
-                "Could not find tokens_per_owner when calling a method on the \
-                enumeration standard.",
-            )
-        });
-        tokens_per_owner
+    fn nft_supply_for_owner(&self, account_id: AccountId) -> Result<U128, BaseError> {
+        let tokens_per_owner =
+            unwrap_or_err!(self.tokens_per_owner.as_ref(), TokensNotFound::new());
+        Ok(tokens_per_owner
             .get(&account_id)
             .map(|account_tokens| U128::from(account_tokens.len() as u128))
-            .unwrap_or(U128(0))
+            .unwrap_or(U128(0)))
     }
 
     fn nft_tokens_for_owner(
@@ -63,35 +62,49 @@ impl NonFungibleTokenEnumeration for NonFungibleToken {
         account_id: AccountId,
         from_index: Option<U128>,
         limit: Option<u64>,
-    ) -> Vec<Token> {
-        let tokens_per_owner = self.tokens_per_owner.as_ref().unwrap_or_else(|| {
-            env::panic_str(
-                "Could not find tokens_per_owner when calling a method on the \
-                enumeration standard.",
-            )
-        });
+    ) -> Result<Vec<Token>, BaseError> {
+        let tokens_per_owner =
+            unwrap_or_err!(self.tokens_per_owner.as_ref(), TokensNotFound::new());
         let token_set = if let Some(token_set) = tokens_per_owner.get(&account_id) {
             token_set
         } else {
-            return vec![];
+            return Ok(vec![]);
         };
 
         if token_set.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
-        require!(limit != 0, "Cannot provide limit of 0.");
+        require_or_err!(limit != 0, InvalidArgument::new("Cannot provide limit of 0."));
         let start_index: u128 = from_index.map(From::from).unwrap_or_default();
-        require!(
-            token_set.len() as u128 > start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
-        token_set
+        require_or_err!(token_set.len() as u128 > start_index, IndexOutOfBounds {});
+        Ok(token_set
             .iter()
             .skip(start_index as usize)
             .take(limit)
             .map(|token_id| self.enum_get_token(account_id.clone(), token_id))
-            .collect()
+            .collect())
+    }
+}
+
+#[contract_error]
+pub struct TokensNotFound {
+    pub message: String,
+}
+
+impl TokensNotFound {
+    pub fn new() -> Self {
+        Self {
+            message: "Could not find tokens_per_owner when calling a method on the \
+        enumeration standard."
+                .to_string(),
+        }
+    }
+}
+
+impl Default for TokensNotFound {
+    fn default() -> Self {
+        Self::new()
     }
 }

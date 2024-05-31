@@ -2,8 +2,8 @@ use std::borrow::Borrow;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::env;
-use crate::store::{key::ToKey, TreeMap, ERR_NOT_EXIST};
+use crate::store::{key::ToKey, TreeMap};
+use crate::{env, errors};
 
 impl<K, V, H> Extend<(K, V)> for TreeMap<K, V, H>
 where
@@ -37,6 +37,6 @@ where
     ///
     /// Panics if the key does not exist in the map
     fn index(&self, index: &Q) -> &Self::Output {
-        self.get(index).unwrap_or_else(|| env::panic_str(ERR_NOT_EXIST))
+        self.get(index).unwrap_or_else(|| env::panic_err(errors::KeyNotFound {}.into()))
     }
 }

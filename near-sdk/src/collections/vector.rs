@@ -8,15 +8,10 @@ use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use near_sdk_macros::near;
 
 use crate::collections::append_slice;
-use crate::{env, IntoStorageKey};
-
-const ERR_INCONSISTENT_STATE: &str = "The collection is an inconsistent state. Did previous smart contract execution terminate unexpectedly?";
-const ERR_ELEMENT_DESERIALIZATION: &str = "Cannot deserialize element";
-const ERR_ELEMENT_SERIALIZATION: &str = "Cannot serialize element";
-const ERR_INDEX_OUT_OF_BOUNDS: &str = "Index out of bounds";
+use crate::{env, errors, IntoStorageKey};
 
 fn expect_consistent_state<T>(val: Option<T>) -> T {
-    val.unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE))
+    val.unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()))
 }
 
 /// An iterable implementation of vector that stores its content on the trie.
@@ -95,7 +90,7 @@ impl<T> Vector<T> {
     /// Panics if `index` is out of bounds.
     pub fn swap_remove_raw(&mut self, index: u64) -> Vec<u8> {
         if index >= self.len {
-            env::panic_str(ERR_INDEX_OUT_OF_BOUNDS)
+            env::panic_err(errors::IndexOutOfBounds {}.into())
         } else if index + 1 == self.len {
             expect_consistent_state(self.pop_raw())
         } else {
@@ -104,7 +99,7 @@ impl<T> Vector<T> {
             if env::storage_write(&lookup_key, &raw_last_value) {
                 expect_consistent_state(env::storage_get_evicted())
             } else {
-                env::panic_str(ERR_INCONSISTENT_STATE)
+                env::panic_err(errors::InconsistentCollectionState::new().into())
             }
         }
     }
@@ -128,7 +123,7 @@ impl<T> Vector<T> {
             let raw_last_value = if env::storage_remove(&last_lookup_key) {
                 expect_consistent_state(env::storage_get_evicted())
             } else {
-                env::panic_str(ERR_INCONSISTENT_STATE)
+                env::panic_err(errors::InconsistentCollectionState::new().into())
             };
             Some(raw_last_value)
         }
@@ -141,13 +136,13 @@ impl<T> Vector<T> {
     /// If `index` is out of bounds.
     pub fn replace_raw(&mut self, index: u64, raw_element: &[u8]) -> Vec<u8> {
         if index >= self.len {
-            env::panic_str(ERR_INDEX_OUT_OF_BOUNDS)
+            env::panic_err(errors::IndexOutOfBounds {}.into())
         } else {
             let lookup_key = self.index_to_lookup_key(index);
             if env::storage_write(&lookup_key, raw_element) {
                 expect_consistent_state(env::storage_get_evicted())
             } else {
-                env::panic_str(ERR_INCONSISTENT_STATE);
+                env::panic_err(errors::InconsistentCollectionState::new().into())
             }
         }
     }
@@ -181,7 +176,8 @@ where
     T: BorshSerialize,
 {
     fn serialize_element(element: &T) -> Vec<u8> {
-        to_vec(element).unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_SERIALIZATION))
+        to_vec(element)
+            .unwrap_or_else(|_| env::panic_err(errors::BorshSerializeError::new("element").into()))
     }
 
     /// Appends an element to the back of the collection.
@@ -203,8 +199,9 @@ where
     T: BorshDeserialize,
 {
     fn deserialize_element(raw_element: &[u8]) -> T {
-        T::try_from_slice(raw_element)
-            .unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_DESERIALIZATION))
+        T::try_from_slice(raw_element).unwrap_or_else(|_| {
+            env::panic_err(errors::BorshDeserializeError::new("element").into())
+        })
     }
 
     /// Returns the element by index or `None` if it is not present.

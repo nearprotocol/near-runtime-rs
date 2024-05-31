@@ -1,5 +1,6 @@
-use near_sdk::require;
-use near_sdk::{env, near, Promise, PromiseError};
+use near_sdk::require_or_err;
+use near_sdk::{env, near, BaseError, Promise, PromiseError};
+use near_sdk::errors::{InvalidArgument, UnexpectedFailure, InvalidPromiseReturn};
 
 const A_VALUE: u8 = 8;
 
@@ -25,24 +26,28 @@ impl Callback {
 
     /// Returns a static string if fail is false, return
     #[private]
-    pub fn b(fail: bool) -> &'static str {
+    pub fn b(fail: bool) -> Result<&'static str, BaseError> {
         if fail {
-            env::panic_str("failed within function b");
+            return Err(UnexpectedFailure {
+                message: "Failed within function b".to_string(),
+            }
+            .into());
         }
-        "Some string"
+        Ok("Some string")
     }
 
     /// Panics if value is 0, returns the value passed in otherwise.
     #[private]
-    pub fn c(value: u8) -> u8 {
-        require!(value > 0, "Value must be positive");
-        value
+    pub fn c(value: u8) -> Result<u8, InvalidArgument> {
+        require_or_err!(value > 0, InvalidArgument::new("Value must be positive"));
+        Ok(value)
     }
 
     /// Panics if value is 0.
     #[private]
-    pub fn d(value: u8) {
-        require!(value > 0, "Value must be positive");
+    pub fn d(value: u8) -> Result<(), InvalidArgument> {
+        require_or_err!(value > 0, InvalidArgument::new("Value must be positive"));
+        Ok(())
     }
 
     /// Receives the callbacks from the other promises called.
@@ -52,12 +57,12 @@ impl Callback {
         #[callback_result] b: Result<String, PromiseError>,
         #[callback_result] c: Result<u8, PromiseError>,
         #[callback_result] d: Result<(), PromiseError>,
-    ) -> (bool, bool, bool) {
-        require!(a == A_VALUE, "Promise returned incorrect value");
+    ) -> Result<(bool, bool, bool), BaseError> {
+        require_or_err!(a == A_VALUE, InvalidPromiseReturn::new("Promise returned incorrect value"));
         if let Ok(s) = b.as_ref() {
-            require!(s == "Some string");
+            require_or_err!(s == "Some string");
         }
-        (b.is_err(), c.is_err(), d.is_err())
+        Ok((b.is_err(), c.is_err(), d.is_err()))
     }
 }
 

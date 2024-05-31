@@ -5,10 +5,7 @@ use near_sdk_macros::near;
 use once_cell::unsync::OnceCell;
 
 use crate::utils::StableMap;
-use crate::{env, CacheEntry, EntryState, IntoStorageKey};
-
-const ERR_ELEMENT_DESERIALIZATION: &str = "Cannot deserialize element";
-const ERR_ELEMENT_SERIALIZATION: &str = "Cannot serialize element";
+use crate::{env, errors, CacheEntry, EntryState, IntoStorageKey};
 
 #[near(inside_nearsdk)]
 pub(crate) struct IndexMap<T>
@@ -59,8 +56,9 @@ where
                     match v.value().as_ref() {
                         Some(modified) => {
                             buf.clear();
-                            BorshSerialize::serialize(modified, &mut buf)
-                                .unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_SERIALIZATION));
+                            BorshSerialize::serialize(modified, &mut buf).unwrap_or_else(|_| {
+                                env::panic_err(errors::BorshSerializeError::new("element").into())
+                            });
                             env::storage_write(&key_buf, &buf);
                         }
                         None => {
@@ -95,8 +93,9 @@ where
     T: BorshSerialize + BorshDeserialize,
 {
     fn deserialize_element(raw_element: &[u8]) -> T {
-        T::try_from_slice(raw_element)
-            .unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_DESERIALIZATION))
+        T::try_from_slice(raw_element).unwrap_or_else(|_| {
+            env::panic_err(errors::BorshDeserializeError::new("element").into())
+        })
     }
 
     /// Returns the element by index or `None` if it is not present.

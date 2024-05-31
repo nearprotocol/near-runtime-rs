@@ -14,7 +14,9 @@ pub extern "C" fn method() {
                 .expect("Failed to serialize the return value using JSON.");
             ::near_sdk::env::value_return(&result);
         }
-        ::std::result::Result::Err(err) => ::near_sdk::FunctionError::panic(&err),
+        ::std::result::Result::Err(err) => {
+            ::near_sdk::FunctionError::panic(&err);
+        }
     }
 }
 

@@ -1,3 +1,5 @@
+use crate::errors;
+
 /// Enables contract runtime to panic with the given type. Any error type used in conjunction
 /// with `#[handle_result]` has to implement this trait.
 ///
@@ -29,7 +31,7 @@ where
     T: AsRef<str>,
 {
     fn panic(&self) -> ! {
-        crate::env::panic_str(self.as_ref())
+        crate::env::panic_err(errors::ContractError::new(self.as_ref()).into())
     }
 }
 

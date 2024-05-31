@@ -1,5 +1,6 @@
 ---
 source: near-sdk-macros/src/core_impl/code_generator/item_impl_info.rs
+assertion_line: 287
 expression: pretty_print_syn_str(&actual).unwrap()
 ---
 #[cfg(target_arch = "wasm32")]
@@ -17,9 +18,12 @@ pub extern "C" fn method() {
         )
         .expect("Failed to deserialize input from JSON.");
     if ::near_sdk::env::state_exists() {
-        ::near_sdk::env::panic_str("The contract has already been initialized");
+        ::near_sdk::env::panic_err(
+            ::near_sdk::errors::ContractAlreadyInitialized {
+            }
+                .into(),
+        );
     }
     let contract = Hello::method(&mut k);
     ::near_sdk::env::state_write(&contract);
 }
-

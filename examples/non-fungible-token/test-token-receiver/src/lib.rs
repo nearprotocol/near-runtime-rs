@@ -4,6 +4,7 @@ A stub contract that implements nft_on_transfer for simulation testing nft_trans
 use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;
 use near_contract_standards::non_fungible_token::TokenId;
 use near_sdk::{env, log, near, require, AccountId, Gas, PanicOnDefault, PromiseOrValue};
+use near_sdk::errors::{InvalidArgument, PermissionDenied};
 
 /// It is estimated that we need to attach 5 TGas for the code execution and 5 TGas for cross-contract call
 const GAS_FOR_NFT_ON_TRANSFER: Gas = Gas::from_tgas(10);
@@ -46,7 +47,7 @@ impl NonFungibleTokenReceiver for TokenReceiver {
         // Verifying that we were called by non-fungible token contract that we expect.
         require!(
             env::predecessor_account_id() == self.non_fungible_token_account_id,
-            "Only supports the one non-fungible token contract"
+            &String::from(PermissionDenied::new(Some("Only supports the one fungible token contract")))
         );
         log!(
             "in nft_on_transfer; sender_id={}, previous_owner_id={}, token_id={}, msg={}",
@@ -74,7 +75,7 @@ impl NonFungibleTokenReceiver for TokenReceiver {
                     .ok_go(false)
                     .into()
             }
-            _ => env::panic_str("unsupported msg"),
+            _ => env::panic_err(InvalidArgument::new("Unsupported msg")),
         }
     }
 }

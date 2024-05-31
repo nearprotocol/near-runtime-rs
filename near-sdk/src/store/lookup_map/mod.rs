@@ -8,15 +8,11 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk_macros::near;
 use once_cell::unsync::OnceCell;
 
-use super::ERR_NOT_EXIST;
 use crate::store::key::{Identity, ToKey};
 use crate::utils::{EntryState, StableMap};
-use crate::{env, CacheEntry, IntoStorageKey};
+use crate::{env, errors, CacheEntry, IntoStorageKey};
 
 pub use entry::{Entry, OccupiedEntry, VacantEntry};
-
-const ERR_ELEMENT_DESERIALIZATION: &str = "Cannot deserialize element";
-const ERR_ELEMENT_SERIALIZATION: &str = "Cannot serialize element";
 
 /// A non-iterable, lazily loaded storage map that stores its content directly on the storage trie.
 ///
@@ -210,7 +206,9 @@ where
     H: ToKey,
 {
     fn deserialize_element(bytes: &[u8]) -> V {
-        V::try_from_slice(bytes).unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_DESERIALIZATION))
+        V::try_from_slice(bytes).unwrap_or_else(|_| {
+            env::panic_err(errors::BorshDeserializeError::new("element").into())
+        })
     }
 
     fn load_element<Q: ?Sized>(prefix: &[u8], key: &Q) -> (H::KeyType, Option<V>)
@@ -441,8 +439,9 @@ where
                     match val.value().as_ref() {
                         Some(modified) => {
                             buf.clear();
-                            BorshSerialize::serialize(modified, &mut buf)
-                                .unwrap_or_else(|_| env::panic_str(ERR_ELEMENT_SERIALIZATION));
+                            BorshSerialize::serialize(modified, &mut buf).unwrap_or_else(|_| {
+                                env::panic_err(errors::BorshSerializeError::new("element").into())
+                            });
                             env::storage_write(key.as_ref(), &buf);
                         }
                         None => {

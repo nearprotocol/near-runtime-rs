@@ -2,8 +2,9 @@ use crate::env;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::ValueAndIndex;
+use crate::errors;
 use crate::store::key::ToKey;
-use crate::store::{IterableMap, LookupMap, Vector, ERR_INCONSISTENT_STATE};
+use crate::store::{IterableMap, LookupMap, Vector};
 
 /// A view into a single entry in the map, which can be vacant or occupied.
 pub enum Entry<'a, K: 'a, V: 'a, H: 'a>
@@ -239,8 +240,10 @@ where
         K: BorshDeserialize + Ord + Clone,
         V: BorshDeserialize,
     {
-        let old_value =
-            self.values.remove(&self.key).unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE));
+        let old_value = self
+            .values
+            .remove(&self.key)
+            .unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()));
         let last_index = self.keys.len() - 1;
         self.keys.swap_remove(old_value.key_index);
 
@@ -265,7 +268,11 @@ where
     /// }
     /// ```
     pub fn get(&self) -> &V {
-        &self.values.get(&self.key).unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE)).value
+        &self
+            .values
+            .get(&self.key)
+            .unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()))
+            .value
     }
 
     /// Gets a mutable reference to the value in the entry.
@@ -299,7 +306,7 @@ where
         &mut self
             .values
             .get_mut(&self.key)
-            .unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE))
+            .unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()))
             .value
     }
 
@@ -330,7 +337,7 @@ where
         &mut self
             .values
             .get_mut(&self.key)
-            .unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE))
+            .unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()))
             .value
     }
 

@@ -135,6 +135,9 @@ impl AttrSigInfo {
                     }
                     visitor.visit_result_serializer_attr(attr, &serializer)?;
                 }
+                "persist_on_error" => {
+                    visitor.visit_persist_on_error_attr(attr)?;
+                }
                 "handle_result" => {
                     if let Some(value) = args.aliased {
                         let handle_result = HandleResultAttr { check: value };

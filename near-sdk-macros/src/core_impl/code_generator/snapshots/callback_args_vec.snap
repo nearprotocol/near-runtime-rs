@@ -1,5 +1,6 @@
 ---
 source: near-sdk-macros/src/core_impl/code_generator/item_impl_info.rs
+assertion_line: 238
 expression: pretty_print_syn_str(&actual).unwrap()
 ---
 #[cfg(target_arch = "wasm32")]
@@ -8,7 +9,7 @@ pub extern "C" fn method() {
     ::near_sdk::env::setup_panic_hook();
     if ::near_sdk::env::current_account_id() != ::near_sdk::env::predecessor_account_id()
     {
-        ::near_sdk::env::panic_str("Method method is private");
+        ::near_sdk::errors::PrivateMethod::new("method");
     }
     #[derive(::near_sdk::serde::Deserialize)]
     #[serde(crate = "::near_sdk::serde")]
@@ -29,10 +30,9 @@ pub extern "C" fn method() {
                 ) {
                     ::near_sdk::PromiseResult::Successful(x) => x,
                     _ => {
-                        ::near_sdk::env::panic_str(
-                            &::std::format!(
-                                "Callback computation {} was not successful", i
-                            ),
+                        ::near_sdk::env::panic_err(
+                            ::near_sdk::errors::CallbackComputationUnsuccessful::new(i)
+                                .into(),
                         )
                     }
                 };
@@ -44,4 +44,3 @@ pub extern "C" fn method() {
     let contract: Hello = ::near_sdk::env::state_read().unwrap_or_default();
     contract.method(x, y);
 }
-

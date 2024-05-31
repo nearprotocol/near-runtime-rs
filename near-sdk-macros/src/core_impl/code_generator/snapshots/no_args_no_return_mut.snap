@@ -1,5 +1,6 @@
 ---
 source: near-sdk-macros/src/core_impl/code_generator/item_impl_info.rs
+assertion_line: 136
 expression: pretty_print_syn_str(&actual).unwrap()
 ---
 #[cfg(target_arch = "wasm32")]
@@ -7,10 +8,11 @@ expression: pretty_print_syn_str(&actual).unwrap()
 pub extern "C" fn method() {
     ::near_sdk::env::setup_panic_hook();
     if ::near_sdk::env::attached_deposit().as_yoctonear() != 0 {
-        ::near_sdk::env::panic_str("Method method doesn't accept deposit");
+        ::near_sdk::env::panic_err(
+            ::near_sdk::errors::DepositNotAccepted::new("method").into(),
+        );
     }
     let mut contract: Hello = ::near_sdk::env::state_read().unwrap_or_default();
     contract.method();
     ::near_sdk::env::state_write(&contract);
 }
-

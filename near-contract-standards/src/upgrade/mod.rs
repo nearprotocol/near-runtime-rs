@@ -1,19 +1,26 @@
+use near_sdk::errors::{ContractUpgradeError, InvalidArgument, PermissionDenied};
 use near_sdk::json_types::U64;
-use near_sdk::{env, near, require, AccountId, Duration, Promise, Timestamp};
+use near_sdk::{
+    env, near, require_or_err, unwrap_or_err, AccountId, BaseError, Duration, Promise, Timestamp,
+};
 
 type WrappedDuration = U64;
 
 pub trait Ownable {
-    fn assert_owner(&self) {
-        require!(env::predecessor_account_id() == self.get_owner(), "Owner must be predecessor");
+    fn assert_owner(&self) -> Result<(), BaseError> {
+        require_or_err!(
+            env::predecessor_account_id() == self.get_owner(),
+            PermissionDenied::new(Some("Owner must be predecessor"))
+        );
+        Ok(())
     }
     fn get_owner(&self) -> AccountId;
-    fn set_owner(&mut self, owner: AccountId);
+    fn set_owner(&mut self, owner: AccountId) -> Result<(), BaseError>;
 }
 
 pub trait Upgradable {
     fn get_staging_duration(&self) -> WrappedDuration;
-    fn stage_code(&mut self, code: Vec<u8>, timestamp: Timestamp);
+    fn stage_code(&mut self, code: Vec<u8>, timestamp: Timestamp) -> Result<(), BaseError>;
     fn deploy_code(&mut self) -> Promise;
 
     /// Implement migration for the next version.
@@ -42,9 +49,10 @@ impl Ownable for Upgrade {
         self.owner.clone()
     }
 
-    fn set_owner(&mut self, owner: AccountId) {
-        self.assert_owner();
+    fn set_owner(&mut self, owner: AccountId) -> Result<(), BaseError> {
+        unwrap_or_err!(self.assert_owner());
         self.owner = owner;
+        Ok(())
     }
 }
 
@@ -53,29 +61,34 @@ impl Upgradable for Upgrade {
         self.staging_duration.into()
     }
 
-    fn stage_code(&mut self, code: Vec<u8>, timestamp: Timestamp) {
-        self.assert_owner();
-        require!(
+    fn stage_code(&mut self, code: Vec<u8>, timestamp: Timestamp) -> Result<(), BaseError> {
+        unwrap_or_err!(self.assert_owner());
+        require_or_err!(
             env::block_timestamp() + self.staging_duration < timestamp,
-            "Timestamp must be later than staging duration"
+            InvalidArgument::new("Timestamp must be later than staging duration")
         );
         // Writes directly into storage to avoid serialization penalty by using default struct.
         env::storage_write(b"upgrade", &code);
         self.staging_timestamp = timestamp;
+        Ok(())
     }
 
     fn deploy_code(&mut self) -> Promise {
         if self.staging_timestamp < env::block_timestamp() {
-            env::panic_str(
-                format!(
-                    "Deploy code too early: staging ends on {}",
-                    self.staging_timestamp + self.staging_duration
+            env::panic_err(
+                ContractUpgradeError::new(
+                    format!(
+                        "Deploy code too early: staging ends on {}",
+                        self.staging_timestamp + self.staging_duration
+                    )
+                    .as_str(),
                 )
-                .as_str(),
+                .into(),
             );
         }
-        let code = env::storage_read(b"upgrade")
-            .unwrap_or_else(|| env::panic_str("No upgrade code available"));
+        let code = env::storage_read(b"upgrade").unwrap_or_else(|| {
+            env::panic_err(ContractUpgradeError::new("No upgrade code available").into())
+        });
         env::storage_remove(b"upgrade");
         Promise::new(env::current_account_id()).deploy_contract(code)
     }

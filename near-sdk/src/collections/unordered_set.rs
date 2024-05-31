@@ -1,14 +1,10 @@
 //! A set implemented on a trie. Unlike `std::collections::HashSet` the elements in this set are not
 //! hashed but are instead serialized.
 use crate::collections::{append, append_slice, Vector};
-use crate::{env, IntoStorageKey};
+use crate::{env, errors, IntoStorageKey};
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use near_sdk_macros::near;
 use std::mem::size_of;
-
-const ERR_INCONSISTENT_STATE: &str = "The collection is an inconsistent state. Did previous smart contract execution terminate unexpectedly?";
-const ERR_ELEMENT_SERIALIZATION: &str = "Cannot serialize element with Borsh";
-
 /// An iterable implementation of a set that stores its content directly on the trie.
 #[near(inside_nearsdk)]
 pub struct UnorderedSet<T> {
@@ -117,7 +113,7 @@ impl<T> UnorderedSet<T> {
                     // element.
                     let last_element_raw = match self.elements.get_raw(self.len() - 1) {
                         Some(x) => x,
-                        None => env::panic_str(ERR_INCONSISTENT_STATE),
+                        None => env::panic_err(errors::InconsistentCollectionState::new().into()),
                     };
                     env::storage_remove(&index_lookup);
                     // If the removed element was the last element from keys, then we don't need to
@@ -144,7 +140,7 @@ where
     fn serialize_element(element: &T) -> Vec<u8> {
         match to_vec(element) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_ELEMENT_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("element").into()),
         }
     }
 

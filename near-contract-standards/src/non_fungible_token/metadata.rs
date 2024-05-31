@@ -1,5 +1,6 @@
+use near_sdk::errors::{InvalidContractState, InvalidHashLength};
 use near_sdk::json_types::Base64VecU8;
-use near_sdk::{near, require};
+use near_sdk::{contract_error, near, require_or_err, BaseError};
 
 /// This spec can be treated like a version of the standard.
 pub const NFT_METADATA_SPEC: &str = "nft-1.0.0";
@@ -40,28 +41,44 @@ pub trait NonFungibleTokenMetadataProvider {
 }
 
 impl NFTContractMetadata {
-    pub fn assert_valid(&self) {
-        require!(self.spec == NFT_METADATA_SPEC, "Spec is not NFT metadata");
-        require!(
+    pub fn assert_valid(&self) -> Result<(), BaseError> {
+        require_or_err!(
+            self.spec == NFT_METADATA_SPEC,
+            InvalidSpec::new("Spec is not NFT metadata")
+        );
+        require_or_err!(
             self.reference.is_some() == self.reference_hash.is_some(),
-            "Reference and reference hash must be present"
+            InvalidContractState::new("Reference and reference hash must be present")
         );
         if let Some(reference_hash) = &self.reference_hash {
-            require!(reference_hash.0.len() == 32, "Hash has to be 32 bytes");
+            require_or_err!(reference_hash.0.len() == 32, InvalidHashLength::new(32));
         }
+        Ok(())
     }
 }
 
 impl TokenMetadata {
-    pub fn assert_valid(&self) {
-        require!(self.media.is_some() == self.media_hash.is_some());
+    pub fn assert_valid(&self) -> Result<(), BaseError> {
+        require_or_err!(self.media.is_some() == self.media_hash.is_some());
         if let Some(media_hash) = &self.media_hash {
-            require!(media_hash.0.len() == 32, "Media hash has to be 32 bytes");
+            require_or_err!(media_hash.0.len() == 32, InvalidHashLength::new(32));
         }
 
-        require!(self.reference.is_some() == self.reference_hash.is_some());
+        require_or_err!(self.reference.is_some() == self.reference_hash.is_some());
         if let Some(reference_hash) = &self.reference_hash {
-            require!(reference_hash.0.len() == 32, "Reference hash has to be 32 bytes");
+            require_or_err!(reference_hash.0.len() == 32, InvalidHashLength::new(32));
         }
+        Ok(())
+    }
+}
+
+#[contract_error]
+pub struct InvalidSpec {
+    pub message: String,
+}
+
+impl InvalidSpec {
+    pub fn new(message: &str) -> Self {
+        Self { message: message.to_string() }
     }
 }

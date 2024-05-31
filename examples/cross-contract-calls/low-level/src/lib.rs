@@ -1,5 +1,6 @@
 use near_sdk::serde_json;
 use near_sdk::{env, near, require, Gas, NearToken, PromiseResult};
+use near_sdk::errors::PromiseFailed;
 
 // Prepaid gas for a single (not inclusive of recursion) `factorial` call.
 const FACTORIAL_CALL_GAS: Gas = Gas::from_tgas(20);
@@ -45,7 +46,7 @@ impl CrossContract {
         require!(env::promise_results_count() == 1);
         let cur = match env::promise_result(0) {
             PromiseResult::Successful(x) => serde_json::from_slice::<u32>(&x).unwrap(),
-            _ => env::panic_str("Promise with index 0 failed"),
+            _ => env::panic_err(PromiseFailed::new(Some(0), None).into()),
         };
         env::value_return(&serde_json::to_vec(&(cur * n)).unwrap());
     }

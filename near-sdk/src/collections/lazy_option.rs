@@ -8,11 +8,9 @@ use std::marker::PhantomData;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 
 use crate::env;
+use crate::errors;
 use crate::IntoStorageKey;
 use near_sdk_macros::near;
-
-const ERR_VALUE_SERIALIZATION: &str = "Cannot serialize value with Borsh";
-const ERR_VALUE_DESERIALIZATION: &str = "Cannot deserialize value with Borsh";
 
 /// An persistent lazy option, that stores a value in the storage.
 #[near(inside_nearsdk)]
@@ -94,14 +92,14 @@ where
     fn serialize_value(value: &T) -> Vec<u8> {
         match to_vec(value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("value").into()),
         }
     }
 
     fn deserialize_value(raw_value: &[u8]) -> T {
         match T::try_from_slice(raw_value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_DESERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshDeserializeError::new("value").into()),
         }
     }
 

@@ -1,8 +1,8 @@
 mod iter;
 pub use self::iter::{Drain, Iter, IterMut};
 
-use super::{Vector, ERR_INCONSISTENT_STATE};
-use crate::{env, IntoStorageKey};
+use super::Vector;
+use crate::{env, errors, IntoStorageKey};
 use near_sdk_macros::{near, NearSchema};
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -153,7 +153,7 @@ where
                 // Update pointer on bucket to this next index
                 self.first_free = next_index;
             } else {
-                env::panic_str(ERR_INCONSISTENT_STATE)
+                env::panic_err(errors::InconsistentCollectionState::new().into())
             }
         } else {
             // No vacant cells, push and return index of pushed element
@@ -256,7 +256,7 @@ where
                 self.elements.swap(curr_free_index.0, occupied_index);
             } else {
                 //Could not find an occupied slot to fill the free slot
-                env::panic_str(ERR_INCONSISTENT_STATE)
+                env::panic_err(errors::InconsistentCollectionState::new().into())
             }
         }
 
@@ -271,7 +271,7 @@ where
                 Some(Slot::Empty { next_free }) => *next_free,
                 Some(Slot::Occupied(_)) => {
                     //The free list chain should not have an occupied slot
-                    env::panic_str(ERR_INCONSISTENT_STATE)
+                    env::panic_err(errors::InconsistentCollectionState::new().into())
                 }
                 _ => None,
             };

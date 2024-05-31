@@ -3,6 +3,7 @@ A stub contract that implements nft_on_approve for e2e testing nft_approve.
 */
 use near_contract_standards::non_fungible_token::approval::NonFungibleTokenApprovalReceiver;
 use near_contract_standards::non_fungible_token::TokenId;
+use near_sdk::errors::PermissionDenied;
 use near_sdk::{env, log, near, require, AccountId, Gas, PanicOnDefault, PromiseOrValue};
 
 /// It is estimated that we need to attach 5 TGas for the code execution and 5 TGas for cross-contract call
@@ -45,7 +46,7 @@ impl NonFungibleTokenApprovalReceiver for ApprovalReceiver {
         // Verifying that we were called by non-fungible token contract that we expect.
         require!(
             env::predecessor_account_id() == self.non_fungible_token_account_id,
-            "Only supports the one non-fungible token contract"
+            &String::from(PermissionDenied::new(Some("Only supports the one fungible token contract")))
         );
         log!(
             "in nft_on_approve; sender_id={}, previous_owner_id={}, token_id={}, msg={}",

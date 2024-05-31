@@ -383,6 +383,7 @@ pub fn near_bindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
         let abi_embedded = abi::embed();
         #[cfg(not(feature = "__abi-embed-checked"))]
         let abi_embedded = quote! {};
+
         TokenStream::from(quote! {
             #input
             #ext_gen
@@ -445,11 +446,14 @@ fn process_impl_block(
     // Add wrapper methods for ext call API
     let ext_generated_code = item_impl_info.generate_ext_wrapper_code();
 
+    let error_methods = item_impl_info.generate_error_methods();
+
     Ok(TokenStream::from(quote! {
         #ext_generated_code
         #input
         #generated_code
         #abi_generated
+        #error_methods
     })
     .into())
 }
@@ -768,7 +772,7 @@ pub fn derive_no_default(item: TokenStream) -> TokenStream {
         TokenStream::from(quote! {
             impl ::std::default::Default for #name {
                 fn default() -> Self {
-                    ::near_sdk::env::panic_str("The contract is not initialized");
+                    ::near_sdk::env::panic_err(::near_sdk::errors::ContractNotInitialized{}.into());
                 }
             }
         })
@@ -835,7 +839,7 @@ pub fn function_error(item: TokenStream) -> TokenStream {
     TokenStream::from(quote! {
         impl ::near_sdk::FunctionError for #name {
             fn panic(&self) -> ! {
-                ::near_sdk::env::panic_str(&::std::string::ToString::to_string(&self))
+                ::near_sdk::env::panic_err(::near_sdk::errors::ContractError::new(&::std::string::ToString::to_string(&self)).into())
             }
         }
     })
@@ -926,4 +930,151 @@ pub fn derive_event_attributes(item: TokenStream) -> TokenStream {
             .to_compile_error(),
         )
     }
+}
+
+/// This attribute macro is used on a struct or enum to generate the necessary code for an error
+///  returned from a contract method call.
+///
+/// # Example:
+///  
+/// For the error:
+/// ```ignore
+/// #[contract_error]
+/// pub struct MyError {
+///    field1: String,
+///    field2: String,
+/// }
+/// ```
+///
+/// And the function:
+/// ```ignore
+/// pub fn my_method(&self) -> Result<(), MyError>;
+/// ```
+///
+/// The error is serialized as a JSON object with the following structure:
+/// ```ignore
+/// {
+///    "error": {
+///       // this name can be "SDK_CONTRACT_ERROR" and "CUSTOM_CONTRACT_ERROR"
+///       // To generate "SDK_CONTRACT_ERROR", use sdk attribute `#[contract_error(sdk)]`.
+///       // Otherwise, it will generate "CUSTOM_CONTRACT_ERROR"
+///       "name": "CUSTOM_CONTRACT_ERROR",
+///       "cause": {
+///         // this name is the name of error struct
+///         "name": "MyError",
+///         "info": {
+///             /// fields of the error struct
+///             "field1": "value1",
+///             "field2": "value2"
+///         }
+///    }
+/// }
+/// ```
+///
+/// Note: you can assign any error defined like that to BaseError:
+/// ```ignore
+/// let base_error: BaseError = MyError { field1: "value1".to_string(), field2: "value2".to_string() }.into();
+/// ```
+///
+/// Use inside_nearsdk attribute (#[contract_error(inside_nearsdk)]) if the error struct is defined inside near-sdk.
+/// Don't use if it is defined outside.
+///
+/// Internally, it makes error struct to:
+///  - implement `near_sdk::ContractErrorTrait` so that it becomes correct error
+/// which can be returned from contract method with defined structure.
+///  - implement `From<ErrorStruct> for near_sdk::BaseError` as a polymorphic solution
+///  - implement `From<ErrorStruct> for String` to convert the error to a string
+
+#[derive(FromMeta)]
+struct ContractErrorArgs {
+    sdk: Option<bool>,
+    inside_nearsdk: Option<bool>,
+}
+#[proc_macro_attribute]
+pub fn contract_error(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let meta_list = match NestedMeta::parse_meta_list(attr.into()) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(Error::from(e).write_errors());
+        }
+    };
+
+    let contract_error_args = match ContractErrorArgs::from_list(&meta_list) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(e.write_errors());
+        }
+    };
+
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
+    let ident = &input.ident;
+
+    let error_type = if contract_error_args.sdk.unwrap_or(false) {
+        quote! {"SDK_CONTRACT_ERROR"}
+    } else {
+        quote! {"CUSTOM_CONTRACT_ERROR"}
+    };
+
+    let near_sdk_crate: proc_macro2::TokenStream;
+    let mut bool_inside_nearsdk_for_macro = quote! {false};
+
+    if contract_error_args.inside_nearsdk.unwrap_or(false) {
+        near_sdk_crate = quote! {crate};
+        bool_inside_nearsdk_for_macro = quote! {true};
+    } else {
+        near_sdk_crate = quote! {::near_sdk};
+    };
+
+    let mut expanded = quote! {
+        #[#near_sdk_crate ::near(serializers=[json], inside_nearsdk=#bool_inside_nearsdk_for_macro)]
+        #input
+
+        impl #near_sdk_crate ::ContractErrorTrait for #ident {
+            fn error_type(&self) -> &'static str {
+                #error_type
+            }
+
+            fn wrap(&self) -> #near_sdk_crate ::serde_json::Value {
+                #[#near_sdk_crate ::near(inside_nearsdk=#bool_inside_nearsdk_for_macro, serializers = [json])]
+                struct ErrorWrapper<T> {
+                    name: String,
+                    cause: ErrorCause<T>,
+                }
+
+                #[#near_sdk_crate ::near(inside_nearsdk=#bool_inside_nearsdk_for_macro, serializers = [json])]
+                struct ErrorCause<T> {
+                    name: String,
+                    info: T
+                }
+
+                #near_sdk_crate ::serde_json::json! {
+                    { "error" : ErrorWrapper {
+                        name: String::from(self.error_type()),
+                        cause: ErrorCause {
+                            name: std::any::type_name::<#ident>().to_string(),
+                            info: self
+                        }
+                    } }
+                }
+            }
+        }
+    };
+    if *ident != "BaseError" {
+        expanded.extend(quote! {
+            impl From<#ident> for String {
+                fn from(err: #ident) -> Self {
+                    #near_sdk_crate ::serde_json::json!{#near_sdk_crate ::wrap_error(err)}.to_string()
+                }
+            }
+
+            impl From<#ident> for #near_sdk_crate ::BaseError {
+                fn from(err: #ident) -> Self {
+                    #near_sdk_crate ::BaseError{
+                        error: #near_sdk_crate ::wrap_error(err),
+                    }
+                }
+            }
+        });
+    }
+    TokenStream::from(expanded)
 }

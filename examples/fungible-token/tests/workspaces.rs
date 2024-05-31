@@ -55,7 +55,7 @@ async fn init(
         .await?;
     assert!(res.is_success());
 
-    return Ok((ft_contract, alice, defi_contract));
+    Ok((ft_contract, alice, defi_contract))
 }
 
 #[tokio::test]

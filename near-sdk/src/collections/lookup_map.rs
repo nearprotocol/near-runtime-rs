@@ -6,12 +6,8 @@ use std::marker::PhantomData;
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 
 use crate::collections::append_slice;
-use crate::{env, IntoStorageKey};
+use crate::{env, errors, IntoStorageKey};
 use near_sdk_macros::near;
-
-const ERR_KEY_SERIALIZATION: &str = "Cannot serialize key with Borsh";
-const ERR_VALUE_DESERIALIZATION: &str = "Cannot deserialize value with Borsh";
-const ERR_VALUE_SERIALIZATION: &str = "Cannot serialize value with Borsh";
 
 /// An non-iterable implementation of a map that stores its content directly on the trie.
 #[near(inside_nearsdk)]
@@ -86,21 +82,21 @@ where
     fn serialize_key(key: &K) -> Vec<u8> {
         match to_vec(key) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_KEY_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("key").into()),
         }
     }
 
     fn deserialize_value(raw_value: &[u8]) -> V {
         match V::try_from_slice(raw_value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_DESERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshDeserializeError::new("value").into()),
         }
     }
 
     fn serialize_value(value: &V) -> Vec<u8> {
         match to_vec(value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("value").into()),
         }
     }
 

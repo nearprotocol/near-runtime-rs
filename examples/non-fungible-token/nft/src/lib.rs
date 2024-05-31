@@ -27,6 +27,7 @@ use near_contract_standards::non_fungible_token::NonFungibleToken;
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::U128;
+use near_sdk::errors::ContractAlreadyInitialized;
 use near_sdk::{
     env, near, require, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue,
 };
@@ -73,8 +74,11 @@ impl Contract {
 
     #[init]
     pub fn new(owner_id: AccountId, metadata: NFTContractMetadata) -> Self {
-        require!(!env::state_exists(), "Already initialized");
-        metadata.assert_valid();
+        require!(!env::state_exists(), &String::from(ContractAlreadyInitialized {}));
+        let error = metadata.assert_valid();
+        if let Err(e) = error {
+            env::panic_err(e.into())
+        }
         Self {
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
@@ -265,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "The contract is not initialized")]
+    #[should_panic(expected = "ContractNotInitialized")]
     fn test_default() {
         let context = get_context(accounts(1));
         testing_env!(context.build());

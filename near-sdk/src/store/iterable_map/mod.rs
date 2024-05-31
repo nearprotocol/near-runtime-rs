@@ -13,13 +13,13 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk_macros::near;
 
 use crate::store::key::{Sha256, ToKey};
-use crate::{env, IntoStorageKey};
+use crate::{env, errors, IntoStorageKey};
 
 use crate::store::Vector;
 pub use entry::{Entry, OccupiedEntry, VacantEntry};
 
 pub use self::iter::{Drain, Iter, IterMut, Keys, Values, ValuesMut};
-use super::{LookupMap, ERR_INCONSISTENT_STATE, ERR_NOT_EXIST};
+use super::LookupMap;
 
 /// A lazily loaded storage map that stores its content directly on the storage trie.
 /// This structure is similar to [`near_sdk::store::LookupMap`](crate::store::LookupMap), except
@@ -601,11 +601,12 @@ where
             x if x == last_index => {}
             // Otherwise update it's index.
             _ => {
-                let swapped_key =
-                    keys.get(key_index).unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE));
-                let value = values
-                    .get_mut(swapped_key)
-                    .unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE));
+                let swapped_key = keys.get(key_index).unwrap_or_else(|| {
+                    env::panic_err(errors::InconsistentCollectionState::new().into())
+                });
+                let value = values.get_mut(swapped_key).unwrap_or_else(|| {
+                    env::panic_err(errors::InconsistentCollectionState::new().into())
+                });
                 value.key_index = key_index;
             }
         }

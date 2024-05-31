@@ -5,15 +5,10 @@ mod iter;
 pub use iter::Iter;
 
 use crate::collections::{append, append_slice, Vector};
-use crate::{env, IntoStorageKey};
+use crate::{env, errors, IntoStorageKey};
 use borsh::{to_vec, BorshDeserialize, BorshSerialize};
 use near_sdk_macros::near;
 use std::mem::size_of;
-
-const ERR_INCONSISTENT_STATE: &str = "The collection is an inconsistent state. Did previous smart contract execution terminate unexpectedly?";
-const ERR_KEY_SERIALIZATION: &str = "Cannot serialize key with Borsh";
-const ERR_VALUE_DESERIALIZATION: &str = "Cannot deserialize value with Borsh";
-const ERR_VALUE_SERIALIZATION: &str = "Cannot serialize value with Borsh";
 
 /// An iterable implementation of a map that stores its content directly on the trie.
 #[near(inside_nearsdk)]
@@ -53,7 +48,7 @@ impl<K, V> UnorderedMap<K, V> {
         let keys_len = self.keys.len();
         let values_len = self.values.len();
         if keys_len != values_len {
-            env::panic_str(ERR_INCONSISTENT_STATE)
+            env::panic_err(errors::InconsistentCollectionState::new().into())
         } else {
             keys_len
         }
@@ -64,7 +59,7 @@ impl<K, V> UnorderedMap<K, V> {
         let keys_is_empty = self.keys.is_empty();
         let values_is_empty = self.values.is_empty();
         if keys_is_empty != values_is_empty {
-            env::panic_str(ERR_INCONSISTENT_STATE)
+            env::panic_err(errors::InconsistentCollectionState::new().into())
         } else {
             keys_is_empty
         }
@@ -118,7 +113,7 @@ impl<K, V> UnorderedMap<K, V> {
     fn get_raw(&self, key_raw: &[u8]) -> Option<Vec<u8>> {
         self.get_index_raw(key_raw).map(|index| match self.values.get_raw(index) {
             Some(x) => x,
-            None => env::panic_str(ERR_INCONSISTENT_STATE),
+            None => env::panic_err(errors::InconsistentCollectionState::new().into()),
         })
     }
 
@@ -162,7 +157,7 @@ impl<K, V> UnorderedMap<K, V> {
                     // element.
                     let last_key_raw = match self.keys.get_raw(self.len() - 1) {
                         Some(x) => x,
-                        None => env::panic_str(ERR_INCONSISTENT_STATE),
+                        None => env::panic_err(errors::InconsistentCollectionState::new().into()),
                     };
                     env::storage_remove(&index_lookup);
                     // If the removed element was the last element from keys, then we don't need to
@@ -189,21 +184,21 @@ where
     fn serialize_key(key: &K) -> Vec<u8> {
         match to_vec(key) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_KEY_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("key").into()),
         }
     }
 
     fn deserialize_value(raw_value: &[u8]) -> V {
         match V::try_from_slice(raw_value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_DESERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshDeserializeError::new("value").into()),
         }
     }
 
     fn serialize_value(value: &V) -> Vec<u8> {
         match to_vec(value) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_VALUE_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("value").into()),
         }
     }
 

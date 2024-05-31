@@ -27,8 +27,10 @@ use near_contract_standards::storage_management::{
 use near_sdk::borsh::BorshSerialize;
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::U128;
+use near_sdk::errors::ContractAlreadyInitialized;
 use near_sdk::{
-    env, log, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue,
+    env, log, near, require, unwrap_or_err, AccountId, BaseError, BorshStorageKey, NearToken,
+    PanicOnDefault, PromiseOrValue,
 };
 
 #[derive(PanicOnDefault)]
@@ -72,14 +74,23 @@ impl Contract {
     /// the given fungible token metadata.
     #[init]
     pub fn new(owner_id: AccountId, total_supply: U128, metadata: FungibleTokenMetadata) -> Self {
-        require!(!env::state_exists(), "Already initialized");
-        metadata.assert_valid();
+        require!(!env::state_exists(), &String::from(ContractAlreadyInitialized {}));
+        let error = metadata.assert_valid();
+        if let Err(e) = error {
+            env::panic_err(e.into())
+        }
         let mut this = Self {
             token: FungibleToken::new(StorageKey::FungibleToken),
             metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
         };
-        this.token.internal_register_account(&owner_id);
-        this.token.internal_deposit(&owner_id, total_supply.into());
+        let register = this.token.internal_register_account(&owner_id);
+        if let Err(e) = register {
+            env::panic_err(e.into())
+        }
+        let deposit = this.token.internal_deposit(&owner_id, total_supply.into());
+        if let Err(e) = deposit {
+            env::panic_err(e.into())
+        }
 
         near_contract_standards::fungible_token::events::FtMint {
             owner_id: &owner_id,
@@ -95,7 +106,12 @@ impl Contract {
 #[near]
 impl FungibleTokenCore for Contract {
     #[payable]
-    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>) {
+    fn ft_transfer(
+        &mut self,
+        receiver_id: AccountId,
+        amount: U128,
+        memo: Option<String>,
+    ) -> Result<(), BaseError> {
         self.token.ft_transfer(receiver_id, amount, memo)
     }
 
@@ -127,13 +143,16 @@ impl FungibleTokenResolver for Contract {
         sender_id: AccountId,
         receiver_id: AccountId,
         amount: U128,
-    ) -> U128 {
-        let (used_amount, burned_amount) =
-            self.token.internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
+    ) -> Result<U128, BaseError> {
+        let (used_amount, burned_amount) = unwrap_or_err!(self.token.internal_ft_resolve_transfer(
+            &sender_id,
+            receiver_id,
+            amount
+        ));
         if burned_amount > 0 {
             log!("Account @{} burned {}", sender_id, burned_amount);
         }
-        used_amount.into()
+        Ok(used_amount.into())
     }
 }
 
@@ -144,23 +163,25 @@ impl StorageManagement for Contract {
         &mut self,
         account_id: Option<AccountId>,
         registration_only: Option<bool>,
-    ) -> StorageBalance {
+    ) -> Result<StorageBalance, BaseError> {
         self.token.storage_deposit(account_id, registration_only)
     }
 
     #[payable]
-    fn storage_withdraw(&mut self, amount: Option<NearToken>) -> StorageBalance {
+    fn storage_withdraw(&mut self, amount: Option<NearToken>) -> Result<StorageBalance, BaseError> {
         self.token.storage_withdraw(amount)
     }
 
     #[payable]
-    fn storage_unregister(&mut self, force: Option<bool>) -> bool {
+    fn storage_unregister(&mut self, force: Option<bool>) -> Result<bool, BaseError> {
         #[allow(unused_variables)]
-        if let Some((account_id, balance)) = self.token.internal_storage_unregister(force) {
+        if let Some((account_id, balance)) =
+            unwrap_or_err!(self.token.internal_storage_unregister(force))
+        {
             log!("Closed @{} with {}", account_id, balance);
-            true
+            Ok(true)
         } else {
-            false
+            Ok(false)
         }
     }
 
@@ -210,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "The contract is not initialized")]
+    #[should_panic(expected = "ContractNotInitialized")]
     fn test_default() {
         let context = get_context(accounts(1));
         testing_env!(context.build());
@@ -228,7 +249,7 @@ mod tests {
             .predecessor_account_id(accounts(1))
             .build());
         // Paying for account registration, aka storage deposit
-        contract.storage_deposit(None, None);
+        let _ = contract.storage_deposit(None, None);
 
         testing_env!(context
             .storage_usage(env::storage_usage())
@@ -236,7 +257,7 @@ mod tests {
             .predecessor_account_id(accounts(2))
             .build());
         let transfer_amount = TOTAL_SUPPLY / 3;
-        contract.ft_transfer(accounts(1), transfer_amount.into(), None);
+        let _ = contract.ft_transfer(accounts(1), transfer_amount.into(), None);
 
         testing_env!(context
             .storage_usage(env::storage_usage())

@@ -112,7 +112,7 @@ want to disable default initialization, then you can prohibit it like this:
 ```rust
 impl Default for StatusMessage {
     fn default() -> Self {
-        near_sdk::env::panic_str("Contract should be initialized before the usage.")
+        near_sdk::env::panic_err(near_sdk::errors::ContractNotInitialized{}.into())
     }
 }
 ```
@@ -154,7 +154,7 @@ pub fn my_method(&mut self) {
 
 pub fn my_method(&mut self ) {
     if near_sdk::env::current_account_id() != near_sdk::env::predecessor_account_id() {
-        near_sdk::env::panic_str("Method my_method is private");
+        near_sdk::env::panic_err(near_sdk::errors::PrivateMethod::new("my_method"));
     }
 ...
 }

@@ -1,0 +1,14 @@
+---
+source: near-sdk-macros/src/core_impl/code_generator/item_impl_info.rs
+assertion_line: 436
+expression: pretty_print_syn_str(&actual).unwrap()
+---
+#[near]
+impl Contract {
+    pub fn method_error(
+        &self,
+        err: <Result<u64, &'static str> as near_sdk::__private::ResultTypeExt>::Error,
+    ) {
+        ::near_sdk::env::panic_err(err.into());
+    }
+}

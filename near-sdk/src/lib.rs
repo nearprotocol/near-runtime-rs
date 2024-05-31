@@ -9,8 +9,8 @@
 extern crate quickcheck;
 
 pub use near_sdk_macros::{
-    ext_contract, near, near_bindgen, BorshStorageKey, EventMetadata, FunctionError, NearSchema,
-    PanicOnDefault,
+    contract_error, ext_contract, near, near_bindgen, BorshStorageKey, EventMetadata,
+    FunctionError, NearSchema, PanicOnDefault,
 };
 
 pub mod store;
@@ -35,6 +35,8 @@ pub mod json_types;
 
 mod types;
 pub use crate::types::*;
+
+pub mod errors;
 
 #[cfg(all(feature = "unit-testing", not(target_arch = "wasm32")))]
 pub use environment::mock;

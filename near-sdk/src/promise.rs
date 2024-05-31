@@ -8,7 +8,7 @@ use std::num::NonZeroU128;
 use std::rc::Rc;
 
 use crate::env::migrate_to_allowance;
-use crate::{AccountId, Gas, GasWeight, NearToken, PromiseIndex, PublicKey};
+use crate::{errors, AccountId, Gas, GasWeight, NearToken, PromiseIndex, PublicKey};
 
 /// Allow an access key to spend either an unlimited or limited amount of gas
 // This wrapper prevents incorrect construction
@@ -265,7 +265,7 @@ impl Promise {
         match &self.subtype {
             PromiseSubtype::Single(x) => x.actions.borrow_mut().push(action),
             PromiseSubtype::Joint(_) => {
-                crate::env::panic_str("Cannot add action to a joint promise.")
+                crate::env::panic_err(errors::ActionInJointPromise::new().into())
             }
         }
         self
@@ -452,13 +452,13 @@ impl Promise {
             PromiseSubtype::Single(x) => {
                 let mut after = x.after.borrow_mut();
                 if after.is_some() {
-                    crate::env::panic_str(
-                        "Cannot callback promise which is already scheduled after another",
-                    );
+                    crate::env::panic_err(errors::PromiseAlreadyScheduled::new().into());
                 }
                 *after = Some(self)
             }
-            PromiseSubtype::Joint(_) => crate::env::panic_str("Cannot callback joint promise."),
+            PromiseSubtype::Joint(_) => {
+                crate::env::panic_err(errors::CallbackJointPromise::new().into())
+            }
         }
         other
     }

@@ -11,21 +11,15 @@ use once_cell::unsync::OnceCell;
 
 use near_sdk_macros::near;
 
-use crate::env;
-use crate::store::ERR_INCONSISTENT_STATE;
 use crate::utils::{CacheEntry, EntryState};
-use crate::IntoStorageKey;
-
-const ERR_VALUE_SERIALIZATION: &str = "Cannot serialize value with Borsh";
-const ERR_VALUE_DESERIALIZATION: &str = "Cannot deserialize value with Borsh";
-const ERR_NOT_FOUND: &str = "No value found for the given key";
+use crate::{env, errors, IntoStorageKey};
 
 fn expect_key_exists<T>(val: Option<T>) -> T {
-    val.unwrap_or_else(|| env::panic_str(ERR_NOT_FOUND))
+    val.unwrap_or_else(|| env::panic_err(errors::KeyNotFound {}.into()))
 }
 
 fn expect_consistent_state<T>(val: Option<T>) -> T {
-    val.unwrap_or_else(|| env::panic_str(ERR_INCONSISTENT_STATE))
+    val.unwrap_or_else(|| env::panic_err(errors::InconsistentCollectionState::new().into()))
 }
 
 pub(crate) fn load_and_deserialize<T>(key: &[u8]) -> CacheEntry<T>
@@ -33,8 +27,8 @@ where
     T: BorshDeserialize,
 {
     let bytes = expect_key_exists(env::storage_read(key));
-    let val =
-        T::try_from_slice(&bytes).unwrap_or_else(|_| env::panic_str(ERR_VALUE_DESERIALIZATION));
+    let val = T::try_from_slice(&bytes)
+        .unwrap_or_else(|_| env::panic_err(errors::BorshDeserializeError::new("value").into()));
     CacheEntry::new_cached(Some(val))
 }
 
@@ -42,7 +36,8 @@ pub(crate) fn serialize_and_store<T>(key: &[u8], value: &T)
 where
     T: BorshSerialize,
 {
-    let serialized = to_vec(value).unwrap_or_else(|_| env::panic_str(ERR_VALUE_SERIALIZATION));
+    let serialized = to_vec(value)
+        .unwrap_or_else(|_| env::panic_err(errors::BorshSerializeError::new("value").into()));
     env::storage_write(key, &serialized);
 }
 
@@ -97,9 +92,11 @@ where
         if let Some(v) = self.cache.get_mut() {
             *v.value_mut() = Some(value);
         } else {
-            self.cache
-                .set(CacheEntry::new_modified(Some(value)))
-                .unwrap_or_else(|_| env::panic_str("cache is checked to not be filled above"))
+            self.cache.set(CacheEntry::new_modified(Some(value))).unwrap_or_else(|_| {
+                env::panic_err(
+                    errors::ContractError::new("cache is checked to not be filled above").into(),
+                )
+            })
         }
     }
 

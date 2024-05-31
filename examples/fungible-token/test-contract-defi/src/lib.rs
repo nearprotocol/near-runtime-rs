@@ -3,6 +3,7 @@ Some hypothetical DeFi contract that will do smart things with the transferred t
 */
 use near_contract_standards::fungible_token::{receiver::FungibleTokenReceiver, Balance};
 use near_sdk::json_types::U128;
+use near_sdk::errors::{ContractAlreadyInitialized, PermissionDenied};
 use near_sdk::{env, log, near, require, AccountId, Gas, PanicOnDefault, PromiseOrValue};
 
 const BASE_GAS: u64 = 5_000_000_000_000;
@@ -25,7 +26,7 @@ trait ValueReturnTrait {
 impl DeFi {
     #[init]
     pub fn new(fungible_token_account_id: AccountId) -> Self {
-        require!(!env::state_exists(), "Already initialized");
+        require!(!env::state_exists(), &String::from(ContractAlreadyInitialized {}));
         Self { fungible_token_account_id: fungible_token_account_id.into() }
     }
 }
@@ -44,7 +45,9 @@ impl FungibleTokenReceiver for DeFi {
         // Verifying that we were called by fungible token contract that we expect.
         require!(
             env::predecessor_account_id() == self.fungible_token_account_id,
-            "Only supports the one fungible token contract"
+            &String::from(PermissionDenied::new(Some(
+                "Only supports the one fungible token contract"
+            )))
         );
         log!("in {} tokens from @{} ft_on_transfer, msg = {}", amount.0, sender_id, msg);
         match msg.as_str() {

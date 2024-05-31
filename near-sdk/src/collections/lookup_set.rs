@@ -7,9 +7,7 @@ use borsh::{to_vec, BorshSerialize};
 use near_sdk_macros::near;
 
 use crate::collections::append_slice;
-use crate::{env, IntoStorageKey};
-
-const ERR_ELEMENT_SERIALIZATION: &str = "Cannot serialize element with Borsh";
+use crate::{env, errors, IntoStorageKey};
 
 /// A non-iterable implementation of a set that stores its content directly on the storage trie.
 ///
@@ -71,7 +69,7 @@ where
     fn serialize_element(element: &T) -> Vec<u8> {
         match to_vec(element) {
             Ok(x) => x,
-            Err(_) => env::panic_str(ERR_ELEMENT_SERIALIZATION),
+            Err(_) => env::panic_err(errors::BorshSerializeError::new("element").into()),
         }
     }
 
