@@ -13,7 +13,9 @@ struct MacroConfig {
 
 #[derive(serde::Serialize, Default, FromMeta)]
 pub(crate) struct ContractMetadata {
+    #[darling(default)]
     version: Option<String>,
+    #[darling(default)]
     link: Option<String>,
 
     #[darling(multiple, rename = "standard")]
