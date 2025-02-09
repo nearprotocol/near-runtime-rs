@@ -1,3 +1,5 @@
+pub mod macro_type_inspection;
+
 #[cfg(feature = "abi")]
 pub use near_abi::__private::ChunkedAbiEntry;
 #[cfg(feature = "abi")]
