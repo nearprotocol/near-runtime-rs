@@ -317,3 +317,7 @@ The minimum supported Rust version is currently `1.82`. There are no guarantees 
 ## Contributing
 
 If you are interested in contributing, please look at the [contributing guidelines](https://github.com/near/near-sdk-rs/blob/master/CONTRIBUTING.md).
+
+## Unedited Video Link
+
+[![Watch the video](https://raw.githubusercontent.com/emarc99/near-sdk-rs/feat/enhance-readme/assets/thumbnail.jpg)](https://github.com/user-attachments/assets/c66785af-0bae-495a-b9a7-96be499c044f)
