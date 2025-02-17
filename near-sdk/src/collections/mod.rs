@@ -1,3 +1,5 @@
+//! ## General description
+//!
 //! Collections that offer an alternative to standard containers from `std::collections::*` by
 //! utilizing the underlying blockchain trie storage more efficiently.
 //!
@@ -33,6 +35,15 @@
 //!
 //! The efficiency of `LookupMap` comes at the cost, since it has fewer methods than `HashMap` and is not
 //! that seamlessly integrated with the rest of the Rust standard library.
+//!
+//! ## Calls to **host functions**, used in implementation:
+//!
+//! * [`near_sdk::env::storage_write`](crate::env::storage_write)
+//! * [`near_sdk::env::storage_read`](crate::env::storage_read)
+//! * [`near_sdk::env::storage_remove`](crate::env::storage_remove)
+//! * [`near_sdk::env::storage_get_evicted`](crate::env::storage_get_evicted)
+//! * [`near_sdk::env::storage_has_key`](crate::env::storage_has_key)
+//!
 
 mod legacy_tree_map;
 #[allow(deprecated)]
